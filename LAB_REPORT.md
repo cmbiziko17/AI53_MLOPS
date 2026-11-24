@@ -4,19 +4,19 @@
 
 | # | Fichier ou réglage | Problème | Correction |
 |---|--------------------|----------|------------|
-| 1 | `reproducibility.py` – `set_reproducibility()` | Seul le hasard de Python est fixé, pas NumPy ni PyTorch. Deux entraînements identiques donnent des résultats différents. | Fixer aussi la seed de NumPy et de PyTorch. |
-| 2 | `reproducibility.py` – `make_generator()` | La seed n'est pas utilisée pour mélanger les images. | Donner la seed au générateur et compléter `seed_worker()`. |
-| 3 | `validate_data.py` | Les données ne sont pas vérifiées du tout. | Coder les vérifications et arrêter si une erreur est trouvée. |
-| 4 | Pas de `dvc.yaml` | Rien n'oblige à valider les données avant de les préparer, ni à refaire la préparation si on change un réglage. | Créer un pipeline DVC avec les dépendances entre étapes. |
-| 5 | `provenance.py` | On ne sait pas avec quel code, quelles versions ni quelle machine un modèle a été entraîné. | Enregistrer ces informations au début de chaque Run. |
-| 6 | `train.py` | Rien n'est enregistré dans MLflow, et `model.pt` est écrasé à chaque entraînement. | Enregistrer les paramètres, les métriques et le modèle dans MLflow. |
-| 7 | `pyproject.toml` | Les versions des librairies ne sont pas exactes. | Utiliser `uv.lock` avec `uv sync --locked`. |
-| 8 | `params.yaml` – `device: "auto"` | Le matériel (CPU ou GPU) change selon la machine et n'est pas enregistré dans MLflow. | Noter le device dans MLflow ou forcer `cpu`. |
-| 9 | `params.yaml` – `selection.run_id: ""` | On pourrait tester plusieurs modèles et garder le meilleur, ce qui fausse le score de test. | Choisir le modèle avec la validation, puis le tester une seule fois. |
-| 10 | `data/raw/` | Les images ne sont pas versionnées. | Les suivre avec DVC. |
+| 1 | `reproducibility.py` – `set_reproducibility()` | Seule la seed de Python est fixée, pas celles de NumPy et de PyTorch. Deux entraînements avec les mêmes réglages peuvent donc donner des résultats différents. | Fixer aussi la seed de NumPy et de PyTorch. |
+| 2 | `reproducibility.py` – `make_generator()` | La seed n'est pas utilisée pour mélanger les images, donc l'ordre des images change d'un entraînement à l'autre. | Créer le générateur avec la seed et compléter `seed_worker()`. |
+| 3 | `validate_data.py` | Les données ne sont pas vérifiées : on pourrait entraîner le modèle sur des images manquantes ou abîmées sans s'en rendre compte. | Coder les vérifications et arrêter le pipeline en cas d'erreur. |
+| 4 | Pas de `dvc.yaml` | Il n'y a pas de pipeline : rien n'oblige à vérifier les données avant de les préparer, et rien ne relance la préparation quand on change un réglage. | Créer un pipeline DVC qui indique pour chaque étape ce qu'elle lit, ce qu'elle utilise comme réglages et ce qu'elle produit. |
+| 5 | `provenance.py` | On ne garde aucune trace de ce qui a servi à entraîner un modèle : commit, versions des librairies, machine utilisée. | Enregistrer ces informations au début de chaque Run. |
+| 6 | `train.py` | Rien n'est enregistré dans MLflow, et `model.pt` est remplacé à chaque entraînement : on perd les anciens modèles. | Enregistrer les réglages, les résultats et le modèle de chaque Run dans MLflow. |
+| 7 | `pyproject.toml` | Les versions des librairies ne sont pas fixées précisément : deux installations peuvent donner des versions différentes. | Installer avec `uv sync --locked` pour utiliser les versions exactes de `uv.lock`. |
+| 8 | `params.yaml` – `device: "auto"` | Le code choisit tout seul le CPU ou le GPU selon la machine, et ce choix n'est pas enregistré dans MLflow. | Enregistrer le device utilisé dans MLflow, ou imposer le CPU. |
+| 9 | `params.yaml` – `selection.run_id: ""` | Aucun modèle n'est encore choisi. Si on testait plusieurs modèles pour garder le meilleur, le score de test ne serait plus fiable. | Choisir le modèle avec le jeu de validation, puis le tester une seule fois. |
+| 10 | `data/raw/` | Les images ne sont pas versionnées : on ne sait pas quelle version des données a été utilisée. | Versionner les images avec DVC. |
 
 ### Engineering checkpoint 1
 
 **Pourquoi un fichier `model.pt` qui fonctionne ne suffit-il pas à prouver qu'une expérience est reproductible ?**
 
-Le fichier `model.pt` contient seulement le modèle entraîné. Il ne dit pas avec quel code, quelles données, quelles versions des librairies, quels réglages ni quelle seed il a été obtenu. Sans ces informations, on ne peut pas refaire l'entraînement et vérifier qu'on obtient le même résultat.
+Le fichier `model.pt` contient seulement les poids du modèle entraîné. Il ne dit pas avec quel code, quelles données, quelles versions des librairies, quels réglages ni quelle seed il a été obtenu. Sans ces informations, on ne peut pas refaire l'entraînement et vérifier qu'on retrouve le même résultat.
